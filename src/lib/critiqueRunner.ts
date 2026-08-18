@@ -26,10 +26,6 @@ function buildRouteInput(nodeId: string): RouteCritiqueInput | null {
   };
 }
 
-export function isCritiquing(nodeId: string): boolean {
-  return inflight.has(nodeId);
-}
-
 /** Kicks off (or joins an existing) critique request for a route that
  * doesn't already have real data. Resolves once the result — or a
  * rejection — is settled; the cache itself is the source of truth for

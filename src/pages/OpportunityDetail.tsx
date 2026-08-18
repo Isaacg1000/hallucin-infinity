@@ -37,6 +37,7 @@ function TrackedOpportunityDetail({ opportunity }: { opportunity: Opportunity })
   const validation = getValidation(opportunity.id);
 
   return (
+    <div className="h-full overflow-y-auto">
     <div className="mx-auto max-w-wide px-8 py-8">
       <Link
         to="/opportunities"
@@ -192,6 +193,7 @@ function TrackedOpportunityDetail({ opportunity }: { opportunity: Opportunity })
         </div>
       </div>
     </div>
+    </div>
   );
 }
 
@@ -234,11 +236,12 @@ export function OpportunityDetail() {
 
 
   return (
+    <div className="h-full overflow-y-auto">
     <div className="mx-auto max-w-wide px-8 py-8">
       <Link
         to="/opportunities"
         className="inline-flex items-center gap-1.5 text-xs text-muted transition-colors hover:text-ink">
-        
+
         <ArrowLeftIcon className="h-3.5 w-3.5" strokeWidth={1.75} />
         Opportunity Explorer
       </Link>
@@ -511,6 +514,7 @@ export function OpportunityDetail() {
           </div>
         </div>
       </div>
+    </div>
     </div>);
 
 }

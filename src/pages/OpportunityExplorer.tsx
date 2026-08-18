@@ -122,6 +122,7 @@ export function OpportunityExplorer() {
   }, [opportunities]);
 
   return (
+    <div className="h-full overflow-y-auto">
     <div className="mx-auto max-w-wide px-8 py-8">
       <header className="border-b border-line pb-8">
         <p className="text-2xs font-medium uppercase tracking-label text-muted">
@@ -223,6 +224,7 @@ export function OpportunityExplorer() {
           <OpportunityTable rows={rows} />
         </div>
       }
+    </div>
     </div>);
 
 }

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getRouteDetail } from '../data/routeDetails';
 import { subscribeToCritiqueCache } from '../data/critiqueCache';
-import { isCritiquing, runCritique } from './critiqueRunner';
+import { runCritique } from './critiqueRunner';
 import { CritiqueApiError } from './critiqueClient';
 import { useExploration } from '../state/ExplorationContext';
 
@@ -32,7 +32,11 @@ export function useCritique(nodeId: string | undefined): CritiqueState {
   }, [nodeId, ideaText, contextAnswers]);
 
   const ready = !!(nodeId && getRouteDetail(nodeId));
-  const loading = !!(nodeId && !ready && isCritiquing(nodeId));
+  // Not derived from the inflight map: that's only populated once the
+  // effect above actually fires, which is a render behind this return.
+  // Treating "not ready and no error yet" as loading avoids a one-render
+  // flash of the not-found/error state before the fetch has even started.
+  const loading = !!(nodeId && !ready && !error);
 
   return { ready, loading, error };
 }
@@ -58,7 +62,7 @@ export function useCritiqueMany(nodeIds: string[]): { ready: boolean; loading: b
   }, [key, ideaText, contextAnswers]);
 
   const ready = nodeIds.length > 0 && nodeIds.every((id) => !!getRouteDetail(id));
-  const loading = nodeIds.some((id) => !getRouteDetail(id) && isCritiquing(id));
+  const loading = nodeIds.length > 0 && !ready && !error;
 
   return { ready, loading, error };
 }

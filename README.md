@@ -57,32 +57,35 @@ this repo — it's just not routed or linked from V1's navigation (see
 ## Live generation
 
 Submitting an idea on Home → Context calls `api/explore.ts` (the Dreamer), a
-Vercel serverless function (Node.js runtime — not Edge, since the Anthropic
-SDK's dependency tree touches `node:fs`/`node:path`) that sends your idea and
-context answers to Claude and gets back a real 5–7 direction,
-several-routes-per-direction exploration tree — not the static NorthPeak
-mock. Opening a route's detail page, comparing it, or validating it calls
-`api/critique.ts` (the Critic) for that specific route the first time it's
-needed, and again in the background as soon as it's saved. The frontend
-never sees an API key; it only talks to these two backend routes.
+Vercel serverless function (Node.js runtime — not Edge, since the
+`@google/genai` SDK's dependency tree touches `node:fs`/`node:path`) that
+sends your idea and context answers to Gemini and gets back a real 5–7
+direction, several-routes-per-direction exploration tree — not the static
+NorthPeak mock. Opening a route's detail page, comparing it, or validating
+it calls `api/critique.ts` (the Critic) for that specific route the first
+time it's needed, and again in the background as soon as it's saved. The
+frontend never sees an API key; it only talks to these two backend routes.
 
 Setup:
 
 ```bash
-cp .env.example .env       # then fill in ANTHROPIC_API_KEY
-vercel dev                 # serves Vite, api/explore.ts, and api/critique.ts locally
+cp .env.example .env       # then fill in GEMINI_API_KEY
+vercel dev --listen 5173   # serves Vite, api/explore.ts, and api/critique.ts, all on :5173
 ```
 
-`yarn dev` alone will not serve `/api/explore` or `/api/critique` (Vite
-doesn't run Vercel functions), so Explore falls back to the static demo tree
-with a toast explaining why if you use `yarn dev` without `vercel dev`, or
-if the API key isn't set, or a request fails for any reason. Route Detail /
-Compare / Validate show a plain error state instead of silently falling
-back, since there's no sensible static substitute for a critique of your
-specific route.
+`yarn dev` alone (plain Vite) will not serve `/api/explore` or
+`/api/critique`, so Explore falls back to the static demo tree with a toast
+explaining why if you use `yarn dev` without `vercel dev`, or if the API
+key isn't set, or a request fails for any reason. **Use `vercel dev
+--listen 5173` instead of `yarn dev` for local development** — same port,
+but with the API routes actually working. Route Detail / Compare /
+Validate show a plain error state instead of silently falling back, since
+there's no sensible static substitute for a critique of your specific
+route.
 
-On Vercel, set `ANTHROPIC_API_KEY` as a project environment variable
-(Project Settings → Environment Variables) — never commit it.
+On Vercel, set `GEMINI_API_KEY` as a project environment variable (Project
+Settings → Environment Variables) — never commit it. (Vertex AI + ADC is
+also supported — see `api/_lib/genai.ts`.)
 
 ## Status
 
