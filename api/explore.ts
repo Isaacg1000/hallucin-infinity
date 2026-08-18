@@ -1,16 +1,18 @@
-// Vercel Edge Function — the Dreamer.
+// Vercel serverless function (Node.js runtime) — the Dreamer.
 //
 // Takes a user's real idea + context answers and asks Claude to generate a
 // genuine strategic exploration tree: 5-7 category directions, each with a
 // few concrete routes. This replaces src/data/nodes.ts's static mock tree
 // for a live exploration. No framework dependency beyond the Anthropic SDK
-// — runs on Vercel's Edge runtime, so the API key never reaches the browser.
+// — runs server-side, so the API key never reaches the browser.
+//
+// Deliberately NOT on the Edge runtime: the Anthropic SDK's dependency
+// tree (standardwebhooks) touches node:fs/node:path, which Edge doesn't
+// support.
 //
 // Local dev: `vercel dev` (this route is not served by `yarn dev`/Vite).
 
 import Anthropic from '@anthropic-ai/sdk';
-
-export const config = { runtime: 'edge' };
 
 interface ContextAnswers {
   goals: string[];
