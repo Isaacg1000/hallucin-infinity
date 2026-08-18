@@ -9,11 +9,9 @@
 // actually is. This is deliberately a separate call from Explore: divergent
 // generation and critical evaluation are different jobs and conflating them
 // in one prompt biases the Dreamer step toward caution.
-//
-// Same runtime constraints as explore.ts: NOT Edge (the Anthropic SDK's
-// dependency tree touches node:fs/node:path).
 
-import Anthropic from '@anthropic-ai/sdk';
+import { Type } from '@google/genai';
+import { createGenAIClient } from './_lib/genai.js';
 
 interface ContextAnswers {
   goals: string[];
@@ -78,165 +76,130 @@ const ASSUMPTION_STATUSES = ['Unvalidated', 'Needs Research', 'Supported', 'Mixe
 const RELEVANCE_LEVELS = ['High', 'Medium', 'Low'];
 const VERDICTS = ['Promising', 'Worth Testing', 'Weak Signal', 'Not Yet'];
 
+// Gemini's structured-output schema (a subset of OpenAPI 3.0) forces the
+// response to be valid JSON matching this shape — same role Claude's
+// forced tool_use played, but simpler since it's just JSON. Cardinality
+// (e.g. 2-4 assumptions) is reinforced in the prompt text since
+// responseSchema's array bounds aren't reliably enforced by the API.
 const EVIDENCE_ITEM_SCHEMA = {
-  type: 'object',
+  type: Type.OBJECT,
   properties: {
-    claim: { type: 'string', description: 'One specific claim, stated plainly' },
-    evidence: { type: 'string', description: '1-2 sentences of reasoning or context supporting/undermining the claim' },
+    claim: { type: Type.STRING, description: 'One specific claim, stated plainly' },
+    evidence: { type: Type.STRING, description: '1-2 sentences of reasoning or context supporting/undermining the claim' },
     source: {
-      type: 'string',
+      type: Type.STRING,
       description:
         'Where this comes from. If you cannot cite a specific, real, verifiable source, use exactly ' +
         '"Model reasoning — not independently verified". NEVER invent a specific study name, company name, ' +
         'statistic, or publication you cannot verify is real — fabricated citations are worse than none.'
     },
-    relevance: { type: 'string', enum: RELEVANCE_LEVELS },
-    date: { type: 'string', description: 'Approximate date/period if genuinely known, otherwise "—"' }
+    relevance: { type: Type.STRING, enum: RELEVANCE_LEVELS },
+    date: { type: Type.STRING, description: 'Approximate date/period if genuinely known, otherwise "—"' }
   },
   required: ['claim', 'evidence', 'source', 'relevance', 'date']
 };
 
-const CRITIQUE_TOOL = {
-  name: 'submit_critique',
-  description:
-    'Submit a grounded, stress-tested evaluation of one strategic route: a full route spec, a ' +
-    'comparison scorecard across six dimensions, and a validation case with evidence for and against.',
-  input_schema: {
-    type: 'object' as const,
-    properties: {
-      routeDetail: {
-        type: 'object',
-        properties: {
-          thesis: { type: 'string', description: 'One or two sentences: the core bet this route is making' },
-          whyExists: {
-            type: 'array',
-            minItems: 2,
-            maxItems: 4,
-            items: { type: 'string' },
-            description: 'Concrete reasons this route is worth considering, specific to this idea'
-          },
-          potentialCustomer: { type: 'string', description: 'Who specifically would buy/use this, in one phrase' },
-          problem: { type: 'string', description: 'The specific problem this route addresses, 1-2 sentences' },
-          product: { type: 'string', description: 'What gets built, described concretely, 1-2 sentences' },
-          businessModel: { type: 'string', description: 'How this makes money, 1 sentence' },
-          mvp: {
-            type: 'array',
-            minItems: 3,
-            maxItems: 5,
-            items: { type: 'string' },
-            description: 'Concrete scope items for a minimum viable version'
-          },
-          upside: {
-            type: 'array',
-            minItems: 2,
-            maxItems: 4,
-            items: { type: 'string' },
-            description: 'Specific reasons this could work well'
-          },
-          challenges: {
-            type: 'array',
-            minItems: 2,
-            maxItems: 4,
-            items: { type: 'string' },
-            description: 'Specific, real obstacles — not generic startup risk'
-          },
-          assumptions: {
-            type: 'array',
-            minItems: 2,
-            maxItems: 4,
-            items: {
-              type: 'object',
-              properties: {
-                text: { type: 'string', description: 'One assumption that must hold true for this route to work' },
-                importance: { type: 'string', enum: IMPORTANCE_LEVELS },
-                status: { type: 'string', enum: ASSUMPTION_STATUSES }
-              },
-              required: ['text', 'importance', 'status']
-            }
-          },
-          unknowns: {
-            type: 'array',
-            minItems: 2,
-            maxItems: 4,
-            items: { type: 'string' },
-            description: 'Specific open questions that would need answering'
-          }
-        },
-        required: [
-          'thesis',
-          'whyExists',
-          'potentialCustomer',
-          'problem',
-          'product',
-          'businessModel',
-          'mvp',
-          'upside',
-          'challenges',
-          'assumptions',
-          'unknowns'
-        ]
-      },
-      comparison: {
-        type: 'object',
-        description:
-          'Rate this route on each dimension relative to plausible alternative directions for this idea, ' +
-          'not in the abstract. For capitalRequired and competitiveIntensity, Low is favorable; for the ' +
-          'other four dimensions, higher is favorable.',
-        properties: {
-          marketPotential: {
-            type: 'object',
-            properties: { level: { type: 'string', enum: RATING_LEVELS }, why: { type: 'string' } },
-            required: ['level', 'why']
-          },
-          differentiation: {
-            type: 'object',
-            properties: { level: { type: 'string', enum: RATING_LEVELS }, why: { type: 'string' } },
-            required: ['level', 'why']
-          },
-          speedToMvp: {
-            type: 'object',
-            properties: { level: { type: 'string', enum: RATING_LEVELS }, why: { type: 'string' } },
-            required: ['level', 'why']
-          },
-          capitalRequired: {
-            type: 'object',
-            properties: { level: { type: 'string', enum: RATING_LEVELS }, why: { type: 'string' } },
-            required: ['level', 'why']
-          },
-          competitiveIntensity: {
-            type: 'object',
-            properties: { level: { type: 'string', enum: RATING_LEVELS }, why: { type: 'string' } },
-            required: ['level', 'why']
-          },
-          evidenceStrength: {
-            type: 'object',
-            properties: { level: { type: 'string', enum: RATING_LEVELS }, why: { type: 'string' } },
-            required: ['level', 'why']
-          }
-        },
-        required: [
-          'marketPotential',
-          'differentiation',
-          'speedToMvp',
-          'capitalRequired',
-          'competitiveIntensity',
-          'evidenceStrength'
-        ]
-      },
-      validation: {
-        type: 'object',
-        properties: {
-          assessmentLabel: { type: 'string', description: 'Short label, e.g. "Promising — Key Unknowns Remain"' },
-          evidenceFor: { type: 'array', minItems: 2, maxItems: 3, items: EVIDENCE_ITEM_SCHEMA },
-          evidenceAgainst: { type: 'array', minItems: 2, maxItems: 3, items: EVIDENCE_ITEM_SCHEMA },
-          finalAssessment: { type: 'string', enum: VERDICTS },
-          finalExplanation: { type: 'string', description: '1-3 sentences: the honest bottom line, including what would change the verdict' }
-        },
-        required: ['assessmentLabel', 'evidenceFor', 'evidenceAgainst', 'finalAssessment', 'finalExplanation']
-      }
+const RATING_SCHEMA = {
+  type: Type.OBJECT,
+  properties: { level: { type: Type.STRING, enum: RATING_LEVELS }, why: { type: Type.STRING } },
+  required: ['level', 'why']
+};
+
+const ROUTE_DETAIL_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    thesis: { type: Type.STRING, description: 'One or two sentences: the core bet this route is making' },
+    whyExists: {
+      type: Type.ARRAY,
+      items: { type: Type.STRING },
+      description: '2-4 concrete reasons this route is worth considering, specific to this idea'
     },
-    required: ['routeDetail', 'comparison', 'validation']
-  }
+    potentialCustomer: { type: Type.STRING, description: 'Who specifically would buy/use this, in one phrase' },
+    problem: { type: Type.STRING, description: 'The specific problem this route addresses, 1-2 sentences' },
+    product: { type: Type.STRING, description: 'What gets built, described concretely, 1-2 sentences' },
+    businessModel: { type: Type.STRING, description: 'How this makes money, 1 sentence' },
+    mvp: {
+      type: Type.ARRAY,
+      items: { type: Type.STRING },
+      description: '3-5 concrete scope items for a minimum viable version'
+    },
+    upside: { type: Type.ARRAY, items: { type: Type.STRING }, description: '2-4 specific reasons this could work well' },
+    challenges: {
+      type: Type.ARRAY,
+      items: { type: Type.STRING },
+      description: '2-4 specific, real obstacles — not generic startup risk'
+    },
+    assumptions: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          text: { type: Type.STRING, description: 'One assumption that must hold true for this route to work' },
+          importance: { type: Type.STRING, enum: IMPORTANCE_LEVELS },
+          status: { type: Type.STRING, enum: ASSUMPTION_STATUSES }
+        },
+        required: ['text', 'importance', 'status']
+      },
+      description: '2-4 assumptions'
+    },
+    unknowns: {
+      type: Type.ARRAY,
+      items: { type: Type.STRING },
+      description: '2-4 specific open questions that would need answering'
+    }
+  },
+  required: [
+    'thesis',
+    'whyExists',
+    'potentialCustomer',
+    'problem',
+    'product',
+    'businessModel',
+    'mvp',
+    'upside',
+    'challenges',
+    'assumptions',
+    'unknowns'
+  ]
+};
+
+const COMPARISON_SCHEMA = {
+  type: Type.OBJECT,
+  description:
+    'Rate this route on each dimension relative to plausible alternative directions for this idea, ' +
+    'not in the abstract. For capitalRequired and competitiveIntensity, Low is favorable; for the ' +
+    'other four dimensions, higher is favorable.',
+  properties: {
+    marketPotential: RATING_SCHEMA,
+    differentiation: RATING_SCHEMA,
+    speedToMvp: RATING_SCHEMA,
+    capitalRequired: RATING_SCHEMA,
+    competitiveIntensity: RATING_SCHEMA,
+    evidenceStrength: RATING_SCHEMA
+  },
+  required: ['marketPotential', 'differentiation', 'speedToMvp', 'capitalRequired', 'competitiveIntensity', 'evidenceStrength']
+};
+
+const VALIDATION_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    assessmentLabel: { type: Type.STRING, description: 'Short label, e.g. "Promising — Key Unknowns Remain"' },
+    evidenceFor: { type: Type.ARRAY, items: EVIDENCE_ITEM_SCHEMA, description: '2-3 items' },
+    evidenceAgainst: { type: Type.ARRAY, items: EVIDENCE_ITEM_SCHEMA, description: '2-3 items' },
+    finalAssessment: { type: Type.STRING, enum: VERDICTS },
+    finalExplanation: { type: Type.STRING, description: '1-3 sentences: the honest bottom line, including what would change the verdict' }
+  },
+  required: ['assessmentLabel', 'evidenceFor', 'evidenceAgainst', 'finalAssessment', 'finalExplanation']
+};
+
+const CRITIQUE_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    routeDetail: ROUTE_DETAIL_SCHEMA,
+    comparison: COMPARISON_SCHEMA,
+    validation: VALIDATION_SCHEMA
+  },
+  required: ['routeDetail', 'comparison', 'validation']
 };
 
 function buildPrompt(ideaText: string, contextAnswers: ContextAnswers | null | undefined, route: RouteInput): string {
@@ -269,14 +232,14 @@ function buildPrompt(ideaText: string, contextAnswers: ContextAnswers | null | u
   return lines.join('\n');
 }
 
-export default async function handler(req: Request): Promise<Response> {
+export async function POST(req: Request): Promise<Response> {
   if (req.method !== 'POST') {
     return new Response(JSON.stringify({ error: 'Method not allowed' }), { status: 405 });
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    return new Response(JSON.stringify({ error: 'ANTHROPIC_API_KEY is not configured on the server' }), { status: 500 });
+  const clientResult = createGenAIClient();
+  if ('error' in clientResult) {
+    return new Response(JSON.stringify({ error: clientResult.error }), { status: 500 });
   }
 
   let body: CritiqueRequestBody;
@@ -295,23 +258,29 @@ export default async function handler(req: Request): Promise<Response> {
     return new Response(JSON.stringify({ error: 'ideaText is too long' }), { status: 400 });
   }
 
-  const anthropic = new Anthropic({ apiKey });
+  const ai = clientResult.client;
 
   try {
-    const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 3072,
-      tools: [CRITIQUE_TOOL],
-      tool_choice: { type: 'tool', name: CRITIQUE_TOOL.name },
-      messages: [{ role: 'user', content: buildPrompt(ideaText, body.contextAnswers, route) }]
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: buildPrompt(ideaText, body.contextAnswers, route),
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: CRITIQUE_SCHEMA
+      }
     });
 
-    const toolUse = message.content.find((block) => block.type === 'tool_use');
-    if (!toolUse || toolUse.type !== 'tool_use') {
+    const text = response.text;
+    if (!text) {
       return new Response(JSON.stringify({ error: 'Model did not return a structured critique' }), { status: 502 });
     }
 
-    const result = toolUse.input as GeneratedCritique;
+    let result: GeneratedCritique;
+    try {
+      result = JSON.parse(text);
+    } catch {
+      return new Response(JSON.stringify({ error: 'Model returned invalid JSON' }), { status: 502 });
+    }
     if (!result?.routeDetail || !result?.comparison || !result?.validation) {
       return new Response(JSON.stringify({ error: 'Model returned an incomplete critique' }), { status: 502 });
     }
@@ -341,7 +310,7 @@ export default async function handler(req: Request): Promise<Response> {
       { status: 200, headers: { 'Content-Type': 'application/json' } }
     );
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error calling Claude';
+    const message = err instanceof Error ? err.message : 'Unknown error calling Gemini';
     return new Response(JSON.stringify({ error: message }), { status: 502 });
   }
 }

@@ -10,8 +10,8 @@
     "preview": "npx vite preview"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.117.1",
     "@emotion/react": "^11.13.3",
+    "@google/genai": "^2.17.1",
     "@xyflow/react": "^12.11.3",
     "framer-motion": "^11.5.4",
     "lucide-react": "0.522.0",
