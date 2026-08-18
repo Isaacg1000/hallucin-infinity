@@ -6,7 +6,9 @@ import {
   GavelIcon,
   CheckIcon,
   XCircleIcon,
-  ArrowDownRightIcon } from
+  ArrowDownRightIcon,
+  MapIcon,
+  ClipboardCheckIcon } from
 'lucide-react';
 import { Panel } from '../components/ui/Panel';
 import { Button } from '../components/ui/Button';
@@ -20,6 +22,178 @@ import { AssumptionTable } from '../components/opportunities/AssumptionTable';
 import { opportunities, portfolioTopOpportunities } from '../data/opportunities';
 import { pricingDetail } from '../data/opportunityDetail';
 import { useExploration } from '../state/ExplorationContext';
+import { getRouteDetail } from '../data/routeDetails';
+import { getValidation } from '../data/validation';
+import { Opportunity } from '../types';
+
+/** Tracked-from-Explore opportunities have no fabricated pricing/market
+ * research behind them — showing the static NorthPeak `pricingDetail`
+ * for one would misrepresent it as real analysis. This renders only what
+ * actually exists: the route's own thesis, assumptions, and validation
+ * evidence, with links back to where that data lives. */
+function TrackedOpportunityDetail({ opportunity }: { opportunity: Opportunity }) {
+  const navigate = useNavigate();
+  const detail = getRouteDetail(opportunity.id);
+  const validation = getValidation(opportunity.id);
+
+  return (
+    <div className="mx-auto max-w-wide px-8 py-8">
+      <Link
+        to="/opportunities"
+        className="inline-flex items-center gap-1.5 text-xs text-muted transition-colors hover:text-ink">
+        <ArrowLeftIcon className="h-3.5 w-3.5" strokeWidth={1.75} />
+        Opportunity Explorer
+      </Link>
+
+      <header className="mt-4 flex flex-wrap items-start justify-between gap-6 border-b border-line pb-6">
+        <div className="max-w-3xl">
+          <div className="mb-2.5 flex flex-wrap items-center gap-2">
+            <span className="text-2xs uppercase tracking-label text-muted">From your exploration</span>
+            <StatusPill label={opportunity.status} />
+          </div>
+          <h1 className="text-[28px] font-semibold leading-tight tracking-[-0.02em] text-ink">{opportunity.title}</h1>
+          <p className="mt-2 text-sm leading-relaxed text-muted">{opportunity.summary}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <ShareButton label={opportunity.title} />
+          <Button variant="secondary" onClick={() => navigate(`/route/${opportunity.id}`)}>
+            <MapIcon className="h-3.5 w-3.5" strokeWidth={1.75} />
+            Route Detail
+          </Button>
+          <Button variant="primary" onClick={() => navigate(`/plan/${opportunity.id}`)}>
+            <ClipboardCheckIcon className="h-3.5 w-3.5" strokeWidth={1.75} />
+            Test Plan
+          </Button>
+        </div>
+      </header>
+
+      <p className="mt-6 max-w-2xl border-l-2 border-line-strong pl-4 text-xs leading-relaxed text-muted">
+        This is a real route from your exploration, not a portfolio analysis — there's no market research, pricing
+        data, or EBITDA modeling behind it. What's shown below is exactly what the Critic actually generated:
+        the route's own thesis, assumptions, and validation evidence.
+      </p>
+
+      <section
+        aria-label="Opportunity summary"
+        className="mt-6 grid grid-cols-2 divide-line border border-line bg-surface md:grid-cols-4 xl:divide-x">
+        {[
+          ['Overall Score', `${opportunity.score} / 100`, true],
+          ['Confidence', `${opportunity.confidence}%`],
+          ['Evidence Strength', opportunity.evidence],
+          ['Estimated Timeline', opportunity.timeToImpact]
+        ].map(([label, value, emphasis]) => (
+          <div key={label as string} className="border-b border-line p-4 xl:border-b-0">
+            <p className="text-2xs uppercase tracking-label text-muted">{label}</p>
+            <p className={`mt-2.5 font-mono text-[17px] font-semibold tabular ${emphasis ? 'text-accent' : 'text-ink'}`}>
+              {value}
+            </p>
+          </div>
+        ))}
+      </section>
+
+      <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="flex flex-col gap-6">
+          {detail && (
+            <Panel title="Strategic Thesis" actions={<EpistemicTag kind="Hypothesis" />}>
+              <p className="max-w-3xl text-[13px] leading-[1.75] text-ink-soft">{detail.thesis}</p>
+            </Panel>
+          )}
+
+          {detail && detail.assumptions.length > 0 && (
+            <Panel
+              title="Critical Assumptions"
+              description="The recommendation is only as strong as these. Unverified assumptions are not treated as facts."
+              actions={<EpistemicTag kind="Assumption" />}
+              bodyClassName="">
+              <ul className="divide-y divide-line">
+                {detail.assumptions.map((a) => (
+                  <li key={a.id} className="flex items-start justify-between gap-4 px-5 py-3.5">
+                    <p className="text-[13px] leading-relaxed text-ink-soft">{a.text}</p>
+                    <div className="flex shrink-0 flex-col items-end gap-1">
+                      <StatusPill label={a.importance} />
+                      <span className="text-2xs text-muted-soft">{a.status}</span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </Panel>
+          )}
+
+          {validation && validation.evidenceFor.length > 0 && (
+            <Panel
+              title="Supporting Evidence"
+              description={`${validation.evidenceFor.length} claims found. Model reasoning — not independently verified.`}
+              actions={<EpistemicTag kind="Evidence" />}>
+              <ul className="space-y-3">
+                {validation.evidenceFor.map((e) => (
+                  <li key={e.id} className="border border-line bg-raised p-3.5">
+                    <p className="text-[13px] font-medium text-ink">{e.claim}</p>
+                    <p className="mt-1.5 text-xs leading-relaxed text-muted">{e.evidence}</p>
+                    <p className="mt-2 text-2xs uppercase tracking-label text-muted-soft">{e.source}</p>
+                  </li>
+                ))}
+              </ul>
+            </Panel>
+          )}
+
+          {validation && validation.evidenceAgainst.length > 0 && (
+            <section className="border-2 border-critical bg-critical-soft/30">
+              <header className="border-b border-critical-line px-5 py-3.5">
+                <h2 className="text-sm font-semibold text-critical">Contradicting Evidence</h2>
+              </header>
+              <ul className="space-y-3 p-5">
+                {validation.evidenceAgainst.map((e) => (
+                  <li key={e.id} className="border border-critical-line bg-surface p-3.5">
+                    <p className="text-[13px] font-medium text-ink">{e.claim}</p>
+                    <p className="mt-1.5 text-xs leading-relaxed text-muted">{e.evidence}</p>
+                    <p className="mt-2 text-2xs uppercase tracking-label text-muted-soft">{e.source}</p>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {!detail && !validation && (
+            <Panel title="Not yet validated">
+              <p className="text-[13px] leading-relaxed text-muted">
+                This route hasn't been through the Critic yet.{' '}
+                <Link to={`/validate/${opportunity.id}`} className="text-accent hover:underline">
+                  Validate it
+                </Link>{' '}
+                to see evidence and assumptions here.
+              </p>
+            </Panel>
+          )}
+        </div>
+
+        <div className="flex flex-col gap-6">
+          <Panel title="Score Composition" bodyClassName="p-5">
+            <div className="mb-4 flex items-end justify-between">
+              <span className="text-xs text-muted">Derived from validation verdict</span>
+              <ScoreBadge score={opportunity.score} size="lg" />
+            </div>
+            <p className="text-xs leading-relaxed text-muted">
+              Confidence and score come directly from this route's Validate verdict — not a weighted five-factor
+              model like portfolio opportunities use, since no EBITDA or execution-risk data exists for it yet.
+            </p>
+          </Panel>
+          <Panel title="Next step" bodyClassName="p-5">
+            <div className="flex flex-col gap-2">
+              <Button variant="secondary" className="w-full justify-center" onClick={() => navigate(`/validate/${opportunity.id}`)}>
+                <GavelIcon className="h-3.5 w-3.5" strokeWidth={1.75} />
+                Re-open Validate
+              </Button>
+              <Button variant="primary" className="w-full justify-center" onClick={() => navigate(`/plan/${opportunity.id}`)}>
+                <FlaskConicalIcon className="h-3.5 w-3.5" strokeWidth={1.75} />
+                Build Test Plan
+              </Button>
+            </div>
+          </Panel>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 const SECTIONS = [
 ['thesis', 'Strategic Thesis'],
@@ -36,6 +210,12 @@ export function OpportunityDetail() {
   const { opportunityId } = useParams();
   const navigate = useNavigate();
   const { trackedOpportunities } = useExploration();
+
+  const trackedMatch = trackedOpportunities.find((o) => o.id === opportunityId);
+  if (trackedMatch) {
+    return <TrackedOpportunityDetail opportunity={trackedMatch} />;
+  }
+
   const all = [...opportunities, ...portfolioTopOpportunities, ...trackedOpportunities];
   const opportunity = all.find((o) => o.id === opportunityId) ?? opportunities[0];
   const detail = pricingDetail;

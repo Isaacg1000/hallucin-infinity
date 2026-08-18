@@ -21,6 +21,7 @@ import { Explorations } from './pages/Explorations';
 import { Saved } from './pages/Saved';
 import { ActionPlan } from './pages/ActionPlan';
 import { OpportunityExplorer } from './pages/OpportunityExplorer';
+import { OpportunityDetail } from './pages/OpportunityDetail';
 
 export function App() {
   return (
@@ -37,6 +38,7 @@ export function App() {
               <Route path="/validate/:nodeId" element={<Validate />} />
               <Route path="/plan/:nodeId" element={<ActionPlan />} />
               <Route path="/opportunities" element={<OpportunityExplorer />} />
+              <Route path="/opportunities/:opportunityId" element={<OpportunityDetail />} />
               <Route path="/explorations" element={<Explorations />} />
               <Route path="/saved" element={<Saved />} />
 

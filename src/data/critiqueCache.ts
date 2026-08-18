@@ -44,3 +44,19 @@ export function clearCritique(nodeId: string): void {
   if (!CRITIQUE_CACHE.delete(nodeId)) return;
   listeners.forEach((fn) => fn());
 }
+
+/** A plain-object snapshot, safe to JSON-serialize — used by
+ * ExplorationContext to persist real Critic results to localStorage. */
+export function serializeCritiqueCache(): Record<string, CritiqueResult> {
+  return Object.fromEntries(CRITIQUE_CACHE);
+}
+
+/** Restores a persisted cache on load. Doesn't notify listeners — this
+ * runs during the provider's initial render, before anything has
+ * subscribed yet. */
+export function hydrateCritiqueCache(data: Record<string, CritiqueResult> | undefined): void {
+  if (!data) return;
+  for (const [nodeId, result] of Object.entries(data)) {
+    CRITIQUE_CACHE.set(nodeId, result);
+  }
+}

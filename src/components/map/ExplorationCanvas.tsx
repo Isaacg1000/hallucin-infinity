@@ -10,7 +10,7 @@ import {
   Edge
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { PlusIcon, MinusIcon, MaximizeIcon } from 'lucide-react';
+import { PlusIcon, MinusIcon, MaximizeIcon, SparklesIcon } from 'lucide-react';
 import { NODES } from '../../data/nodes';
 import { getRouteDetail } from '../../data/routeDetails';
 import { getValidation } from '../../data/validation';
@@ -25,6 +25,7 @@ import { MapNodeData } from './mapTypes';
 import { MapNode } from '../../types';
 import { useExploration } from '../../state/ExplorationContext';
 import { useToast } from '../ui/Toast';
+import { runCritique } from '../../lib/critiqueRunner';
 
 const NODE_TYPES = { idea: IdeaNode, category: CategoryNode, route: RouteNode };
 const EDGE_TYPES = { trace: TraceEdge };
@@ -191,6 +192,8 @@ function CanvasInner() {
   const navigate = useNavigate();
   const { showToast } = useToast();
   const {
+    ideaText,
+    contextAnswers,
     everExpandedIds,
     collapsedIds,
     revealChildren,
@@ -205,6 +208,27 @@ function CanvasInner() {
   const [whyThisId, setWhyThisId] = useState<string | null>(null);
   const [feedbackCategoryId, setFeedbackCategoryId] = useState<string | null>(null);
   const [lens, setLens] = useState<MapLens>('possibilities');
+  const [isCritiquingAll, setIsCritiquingAll] = useState(false);
+
+  // Every leaf route currently visible on the map (its parent has been
+  // expanded) — computed live from NODES rather than the module's
+  // ALL_LEAF_ROUTES export, which goes stale once a live-generated tree
+  // replaces the demo one.
+  const critiqueVisibleRoutes = useCallback(() => {
+    const ids = Object.values(NODES)
+      .filter((n) => n.kind === 'route' && n.childIds.length === 0 && n.parentId && everExpandedIds.has(n.parentId))
+      .map((n) => n.id);
+    if (ids.length === 0) {
+      showToast('No visible routes to critique yet — explore a category first');
+      return;
+    }
+    setIsCritiquingAll(true);
+    showToast(`Critiquing ${ids.length} route${ids.length === 1 ? '' : 's'}...`, 'processing');
+    Promise.allSettled(ids.map((id) => runCritique(id, ideaText, contextAnswers))).then(() => {
+      setIsCritiquingAll(false);
+      showToast('Critique complete', 'success');
+    });
+  }, [everExpandedIds, ideaText, contextAnswers, showToast]);
 
   const handlePrimary = useCallback(
     (id: string) => {
@@ -340,6 +364,15 @@ function CanvasInner() {
       <QuestionStrip />
       <StatsStrip />
       <CanvasControls />
+
+      <button
+        type="button"
+        onClick={critiqueVisibleRoutes}
+        disabled={isCritiquingAll}
+        className="absolute right-5 top-5 z-10 flex items-center gap-1.5 rounded-full border border-line bg-surface/90 px-3 py-1.5 text-2xs font-medium text-ink-soft backdrop-blur-sm transition-colors hover:bg-sunken disabled:cursor-wait disabled:opacity-60">
+        <SparklesIcon className="h-3 w-3" strokeWidth={2} />
+        {isCritiquingAll ? 'Critiquing…' : 'Critique visible routes'}
+      </button>
 
       <RoutePanel
         node={whyThisNode}

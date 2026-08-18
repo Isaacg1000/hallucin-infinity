@@ -132,7 +132,12 @@ export function Compare() {
               <span
                 key={id}
                 className="inline-flex items-center gap-2 rounded-full border border-line bg-raised py-1.5 pl-3 pr-2 text-xs text-ink-soft">
-                {detail?.name ?? id}
+                <button
+                  type="button"
+                  onClick={() => navigate(`/route/${id}`)}
+                  className="underline decoration-dotted decoration-muted-soft underline-offset-2 hover:text-ink hover:decoration-ink">
+                  {detail?.name ?? id}
+                </button>
                 {routeIds.length > 2 && (
                   <button
                     type="button"
@@ -194,8 +199,13 @@ export function Compare() {
           {strongestId ? (
             <>
               <p className="text-sm text-ink-soft">
-                <span className="font-medium text-ink">{getRouteDetail(strongestId)?.name}</span> is best aligned
-                with your stated priorities right now.
+                <button
+                  type="button"
+                  onClick={() => navigate(`/route/${strongestId}`)}
+                  className="font-medium text-ink underline decoration-dotted underline-offset-2 hover:decoration-solid">
+                  {getRouteDetail(strongestId)?.name}
+                </button>{' '}
+                is best aligned with your stated priorities right now.
               </p>
               {tradeOff && (
                 <dl className="mt-3 space-y-2 border-t border-accent-line/60 pt-3">

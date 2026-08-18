@@ -1,18 +1,22 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { ContextAnswers, Opportunity } from '../types';
-import { IDEA_TEXT } from '../data/nodes';
+import { ContextAnswers, MapNode, Opportunity } from '../types';
+import { IDEA_TEXT, loadGeneratedTree, snapshotTree } from '../data/nodes';
 import { buildOpportunityFromRoute } from '../data/trackOpportunity';
 import { ensureCritique } from '../lib/critiqueRunner';
-import { resetCritiqueCache } from '../data/critiqueCache';
+import {
+  resetCritiqueCache,
+  serializeCritiqueCache,
+  hydrateCritiqueCache,
+  subscribeToCritiqueCache
+} from '../data/critiqueCache';
+import { CritiqueResult } from '../lib/critiqueClient';
 
 // A page reload previously wiped every trace of what a user had done —
-// idea text, saved routes, dismissed routes, tracked opportunities all
-// reset to defaults. This persists just that state to localStorage, so a
-// refresh (or reopening the tab) doesn't lose it. It does not persist the
-// generated exploration tree itself (that's regenerated from ideaText on
-// the Map page), so saved/dismissed ids from a live-generated tree may
-// not resolve to real nodes after a reload — same honest fallback that
-// `RouteCard`/`Saved` already apply by filtering out unknown ids.
+// idea text, saved routes, dismissed routes, tracked opportunities, the
+// generated exploration tree, and every Critic result all reset to
+// defaults. This persists all of it to localStorage, so a refresh (or
+// reopening the tab) restores exactly where the user left off, including
+// route detail/comparison/validation data already generated.
 const STORAGE_KEY = 'hallucinate:exploration:v1';
 
 interface PersistedExplorationState {
@@ -21,12 +25,29 @@ interface PersistedExplorationState {
   savedRouteIds: string[];
   dismissedRouteIds: string[];
   trackedOpportunities: Opportunity[];
+  /** The idea text the currently-persisted tree/critiques were generated
+   * for — lets a reload skip a redundant Dreamer call when it still
+   * matches, without ever risking showing a stale tree for a new idea. */
+  treeIdeaText: string | null;
+  isDemoData: boolean;
+  generatedTree: Record<string, MapNode> | null;
+  critiqueCache: Record<string, CritiqueResult>;
 }
 
 function loadPersisted(): Partial<PersistedExplorationState> {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : {};
+    const parsed = raw ? (JSON.parse(raw) as Partial<PersistedExplorationState>) : {};
+    // Hydrate the mutable NODES singleton + critique cache synchronously
+    // here, before any page's effects run, so a reload with a matching
+    // idea can skip re-calling the Dreamer entirely.
+    if (parsed.generatedTree && Object.keys(parsed.generatedTree).length > 0) {
+      loadGeneratedTree(parsed.generatedTree);
+    }
+    if (parsed.critiqueCache) {
+      hydrateCritiqueCache(parsed.critiqueCache);
+    }
+    return parsed;
   } catch {
     return {};
   }
@@ -76,6 +97,15 @@ interface ExplorationState {
    * AppShell (not just a toast that disappears). */
   isDemoData: boolean;
   setIsDemoData: (v: boolean) => void;
+
+  /** The idea text the currently-loaded tree was generated for, or null
+   * before any tree has been generated. ExplorationMap compares this
+   * against the current ideaText to skip a redundant Dreamer call after
+   * a reload. */
+  treeIdeaText: string | null;
+  /** Records that NODES now holds the tree for `forIdeaText` (real or
+   * demo fallback) — call once generation settles, success or failure. */
+  markTreeGenerated: (forIdeaText: string, demo: boolean) => void;
 }
 
 const ExplorationCtx = createContext<ExplorationState | null>(null);
@@ -94,7 +124,19 @@ export function ExplorationProvider({ children }: { children: React.ReactNode })
     new Set(persisted.savedRouteIds ?? Array.from(DEFAULT_SAVED))
   );
   const [dismissedRouteIds, setDismissedRouteIds] = useState<Set<string>>(new Set(persisted.dismissedRouteIds ?? []));
-  const [isDemoData, setIsDemoData] = useState(false);
+  const [isDemoData, setIsDemoData] = useState(persisted.isDemoData ?? false);
+  const [treeIdeaText, setTreeIdeaText] = useState<string | null>(persisted.treeIdeaText ?? null);
+  // Bumped whenever the critique cache writes a new result, so the persist
+  // effect below picks up a fresh snapshot even though the cache itself
+  // isn't React state.
+  const [critiqueVersion, setCritiqueVersion] = useState(0);
+
+  const markTreeGenerated = useCallback((forIdeaText: string, demo: boolean) => {
+    setTreeIdeaText(forIdeaText);
+    setIsDemoData(demo);
+  }, []);
+
+  useEffect(() => subscribeToCritiqueCache(() => setCritiqueVersion((v) => v + 1)), []);
 
   const revealChildren = useCallback((id: string) => {
     setEverExpandedIds((prev) => new Set(prev).add(id));
@@ -175,7 +217,11 @@ export function ExplorationProvider({ children }: { children: React.ReactNode })
       contextAnswers,
       savedRouteIds: Array.from(savedRouteIds),
       dismissedRouteIds: Array.from(dismissedRouteIds),
-      trackedOpportunities
+      trackedOpportunities,
+      treeIdeaText,
+      isDemoData,
+      generatedTree: treeIdeaText ? snapshotTree() : null,
+      critiqueCache: serializeCritiqueCache()
     };
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(toPersist));
@@ -183,7 +229,16 @@ export function ExplorationProvider({ children }: { children: React.ReactNode })
       // Storage full or unavailable (e.g. private browsing) — state
       // simply won't survive a reload; nothing else depends on it.
     }
-  }, [ideaText, contextAnswers, savedRouteIds, dismissedRouteIds, trackedOpportunities]);
+  }, [
+    ideaText,
+    contextAnswers,
+    savedRouteIds,
+    dismissedRouteIds,
+    trackedOpportunities,
+    treeIdeaText,
+    isDemoData,
+    critiqueVersion
+  ]);
 
   const value = useMemo<ExplorationState>(
     () => ({
@@ -208,7 +263,9 @@ export function ExplorationProvider({ children }: { children: React.ReactNode })
       trackOpportunity,
       resetForNewExploration,
       isDemoData,
-      setIsDemoData
+      setIsDemoData,
+      treeIdeaText,
+      markTreeGenerated
     }),
     [
       ideaText,
@@ -228,7 +285,9 @@ export function ExplorationProvider({ children }: { children: React.ReactNode })
       dismissedRouteIds,
       dismissRoute,
       resetForNewExploration,
-      isDemoData
+      isDemoData,
+      treeIdeaText,
+      markTreeGenerated
     ]
   );
 

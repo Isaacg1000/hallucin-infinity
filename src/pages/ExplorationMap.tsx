@@ -31,9 +31,13 @@ const ACTIVITY: ActivityItem[] = [
 const MIN_LOADING_MS = STAGES.length * 650;
 
 export function ExplorationMap() {
-  const { ideaText, contextAnswers, resetForNewExploration, setIsDemoData } = useExploration();
+  const { ideaText, contextAnswers, resetForNewExploration, treeIdeaText, isDemoData, markTreeGenerated } =
+    useExploration();
   const { showToast } = useToast();
-  const [loading, setLoading] = useState(true);
+  // Skip the loading state entirely when a real (non-demo) tree already
+  // persisted for this exact idea — e.g. right after a reload — instead
+  // of re-calling the Dreamer for data we already have.
+  const [loading, setLoading] = useState(!(treeIdeaText === ideaText && !isDemoData));
   const ranFor = useRef<string | null>(null);
 
   useEffect(() => {
@@ -41,6 +45,11 @@ export function ExplorationMap() {
     // re-running when unrelated state on this page changes.
     if (ranFor.current === ideaText) return;
     ranFor.current = ideaText;
+
+    if (treeIdeaText === ideaText && !isDemoData) {
+      setLoading(false);
+      return;
+    }
 
     let cancelled = false;
     const startedAt = Date.now();
@@ -51,13 +60,13 @@ export function ExplorationMap() {
         if (cancelled) return;
         loadGeneratedTree(tree);
         resetForNewExploration();
-        setIsDemoData(false);
+        markTreeGenerated(ideaText, false);
       })
       .catch((err) => {
         if (cancelled) return;
         resetToDemoNodes();
         resetForNewExploration();
-        setIsDemoData(true);
+        markTreeGenerated(ideaText, true);
         const message = err instanceof Error ? err.message : 'Live generation failed';
         showToast(`Showing demo routes — live generation unavailable (${message})`);
       })

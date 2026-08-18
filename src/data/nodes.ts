@@ -502,6 +502,13 @@ export function resetToDemoNodes() {
   loadGeneratedTree(DEMO_NODES);
 }
 
+/** A plain-object snapshot of the current tree, safe to JSON-serialize —
+ * used by ExplorationContext to persist a live-generated tree to
+ * localStorage so it survives a reload instead of being silently lost. */
+export function snapshotTree(): Record<string, MapNode> {
+  return { ...NODES };
+}
+
 export function getNode(id: string): MapNode | undefined {
   return NODES[id];
 }
