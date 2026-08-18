@@ -3,8 +3,14 @@ import { Handle, Position, NodeProps, Node } from '@xyflow/react';
 import { ChevronDownIcon } from 'lucide-react';
 import { MapNodeData } from './mapTypes';
 
+const LENS_TONE: Record<'positive' | 'caution' | 'neutral', string> = {
+  positive: 'text-emerald-700 bg-mint-100',
+  caution: 'text-caution bg-caution-soft',
+  neutral: 'text-muted-soft bg-sunken'
+};
+
 export function CategoryNode({ data }: NodeProps<Node<MapNodeData>>) {
-  const { node, isExpanded, isDimmed, onToggleCategory, onFeedback } = data;
+  const { node, isExpanded, isDimmed, lensBadge, onToggleCategory, onFeedback } = data;
 
   return (
     <div
@@ -25,6 +31,12 @@ export function CategoryNode({ data }: NodeProps<Node<MapNodeData>>) {
         <p className="mt-2 text-2xs text-muted-soft">
           {node.childIds.length} route{node.childIds.length === 1 ? '' : 's'}
         </p>
+        {lensBadge && (
+          <span
+            className={`mt-1.5 inline-flex items-center rounded-full px-1.5 py-[1px] text-2xs font-medium ${LENS_TONE[lensBadge.tone]}`}>
+            {lensBadge.text}
+          </span>
+        )}
       </button>
       {isExpanded && (
         <button

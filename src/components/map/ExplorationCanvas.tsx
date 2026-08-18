@@ -22,6 +22,7 @@ import { RoutePanel } from './RoutePanel';
 import { FeedbackModal } from './FeedbackModal';
 import { TraceEdge } from './TraceEdge';
 import { MapNodeData } from './mapTypes';
+import { MapNode } from '../../types';
 import { useExploration } from '../../state/ExplorationContext';
 import { useToast } from '../ui/Toast';
 
@@ -39,36 +40,58 @@ const LENSES: { id: MapLens; label: string }[] = [
   { id: 'contradictions', label: 'Contradictions' }
 ];
 
-/** Four visual readings of the same map, not four screens. Only route
- * (leaf) nodes ever get a badge — categories stay quiet in every lens.
- * A route with no validation/detail record yet gets an honest "not
- * validated" / "no assumptions logged" badge rather than nothing, so the
- * lens reads as "here's what's true so far," not as broken. */
-function lensBadgeFor(lens: MapLens, nodeId: string, isRoute: boolean): MapNodeData['lensBadge'] {
-  if (!isRoute || lens === 'possibilities') return null;
+/** Every leaf-route id reachable under `nodeId` (inclusive if `nodeId`
+ * itself is one) — used to roll a lens badge up onto category and
+ * branching-route nodes from the leaf data that actually exists. */
+function collectLeafRouteIds(nodeId: string): string[] {
+  const node = NODES[nodeId];
+  if (!node) return [];
+  if (node.kind === 'route' && node.childIds.length === 0) return [nodeId];
+  return node.childIds.flatMap(collectLeafRouteIds);
+}
+
+/** Four visual readings of the same map, not four screens. Every category
+ * and route node gets a badge in every non-possibilities lens — a leaf
+ * route shows its own data, a category or branching route shows a
+ * rollup across the leaf routes underneath it, so switching lenses is
+ * never a no-op just because you haven't drilled to a leaf yet. A node
+ * with no validation/detail record underneath it yet gets an honest
+ * "not validated" / "no assumptions logged" badge rather than nothing,
+ * so the lens reads as "here's what's true so far," not as broken. */
+function lensBadgeFor(lens: MapLens, node: MapNode): MapNodeData['lensBadge'] {
+  if (lens === 'possibilities' || node.kind === 'root') return null;
+
+  const isLeafRoute = node.kind === 'route' && node.childIds.length === 0;
+  const leafIds = isLeafRoute ? [node.id] : collectLeafRouteIds(node.id);
+  if (leafIds.length === 0) return null;
 
   if (lens === 'evidence') {
-    const v = getValidation(nodeId);
-    if (!v) return { text: 'Not yet validated', tone: 'neutral' };
-    const n = v.evidenceFor.length;
+    const validated = leafIds.map(getValidation).filter((v): v is NonNullable<typeof v> => !!v);
+    if (validated.length === 0) return { text: 'Not yet validated', tone: 'neutral' };
+    const n = validated.reduce((sum, v) => sum + v.evidenceFor.length, 0);
     return { text: `${n} evidence item${n === 1 ? '' : 's'}`, tone: n > 0 ? 'positive' : 'neutral' };
   }
 
   if (lens === 'assumptions') {
-    const detail = getRouteDetail(nodeId);
-    if (!detail || detail.assumptions.length === 0) return { text: 'No assumptions logged', tone: 'neutral' };
-    const unresolved = detail.assumptions.filter((a) => a.status === 'Unvalidated' || a.status === 'Needs Research').length;
+    const details = leafIds.map(getRouteDetail).filter((d): d is NonNullable<typeof d> => !!d);
+    const total = details.reduce((sum, d) => sum + d.assumptions.length, 0);
+    if (details.length === 0 || total === 0) return { text: 'No assumptions logged', tone: 'neutral' };
+    const unresolved = details.reduce(
+      (sum, d) => sum + d.assumptions.filter((a) => a.status === 'Unvalidated' || a.status === 'Needs Research').length,
+      0
+    );
     return {
-      text: `${detail.assumptions.length} assumption${detail.assumptions.length === 1 ? '' : 's'}${unresolved ? ` · ${unresolved} open` : ''}`,
+      text: `${total} assumption${total === 1 ? '' : 's'}${unresolved ? ` · ${unresolved} open` : ''}`,
       tone: unresolved > 0 ? 'caution' : 'neutral'
     };
   }
 
   // contradictions
-  const v = getValidation(nodeId);
-  if (!v) return { text: 'Not yet validated', tone: 'neutral' };
-  if (v.evidenceAgainst.length === 0) return { text: 'No contradictions found', tone: 'neutral' };
-  return { text: `${v.evidenceAgainst.length} contradicting`, tone: 'caution' };
+  const validated = leafIds.map(getValidation).filter((v): v is NonNullable<typeof v> => !!v);
+  if (validated.length === 0) return { text: 'Not yet validated', tone: 'neutral' };
+  const n = validated.reduce((sum, v) => sum + v.evidenceAgainst.length, 0);
+  if (n === 0) return { text: 'No contradictions found', tone: 'neutral' };
+  return { text: `${n} contradicting`, tone: 'caution' };
 }
 
 /** Every node id from the root down to `id`, via parentId — the path a
@@ -243,7 +266,7 @@ function CanvasInner() {
         isPromising: promisingRouteIds.has(id),
         isDismissed: dismissedRouteIds.has(id),
         isDimmed: !!spotlightPath && !spotlightPath.has(id),
-        lensBadge: lensBadgeFor(lens, id, node.kind === 'route' && node.childIds.length === 0),
+        lensBadge: lensBadgeFor(lens, node),
         onPrimary: handlePrimary,
         onWhyThis: setWhyThisId,
         onToggleSave: handleToggleSave,
