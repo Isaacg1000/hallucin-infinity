@@ -8,11 +8,11 @@ The core bet: **the value isn't "AI gives you an answer," it's "AI helps you
 see the decision landscape"** — the paths you hadn't considered, not just a
 recommendation for the one you walked in with.
 
-> This is still a prototype. **Explore now calls a real model** (see
-> [Live generation](#live-generation) below) — the strategic routes you get
-> back are generated from your actual idea. Compare, Validate, and
-> everything past Explore are still mocked demo data. See
-> [Status](#status) below.
+> This is still a prototype. **Explore and the Critic now both call a real
+> model** (see [Live generation](#live-generation) below) — the strategic
+> routes you get back, and the route spec / comparison / validation data
+> for any route you save, are generated from your actual idea, not the
+> static NorthPeak demo. See [Status](#status) below.
 
 ## V1 scope
 
@@ -37,6 +37,15 @@ depends on, what's still unknown, and a recommended next test. Every claim
 is tagged as one of four things — **Hypothesis**, **Evidence**, **Inference**,
 or **Unknown** — so nothing reads as more certain than it actually is.
 
+Explore (the **Dreamer**) is deliberately wide and divergent generation; a
+second model call, the **Critic** (`api/critique.ts`), stress-tests one route
+at a time against real-world constraints and produces the route spec,
+comparison scorecard, and validation case that Route Detail, Compare, and
+Validate all read from. It runs lazily the first time a route needs data
+(opening its detail page, comparing it, validating it) and eagerly in the
+background the moment a route is saved from the map, so by the time you
+reach Compare or Validate it's often already there.
+
 **V1 flow:** Home → idea → context → Exploration Map → save routes → Compare
 → Validate one.
 
@@ -47,23 +56,30 @@ this repo — it's just not routed or linked from V1's navigation (see
 
 ## Live generation
 
-Submitting an idea on Home → Context now calls `api/explore.ts`, a Vercel
-Edge Function that sends your idea and context answers to Claude and gets
-back a real 5–7 direction, several-routes-per-direction exploration tree —
-not the static NorthPeak mock. The frontend never sees an API key; it only
-talks to this backend route.
+Submitting an idea on Home → Context calls `api/explore.ts` (the Dreamer), a
+Vercel serverless function (Node.js runtime — not Edge, since the Anthropic
+SDK's dependency tree touches `node:fs`/`node:path`) that sends your idea and
+context answers to Claude and gets back a real 5–7 direction,
+several-routes-per-direction exploration tree — not the static NorthPeak
+mock. Opening a route's detail page, comparing it, or validating it calls
+`api/critique.ts` (the Critic) for that specific route the first time it's
+needed, and again in the background as soon as it's saved. The frontend
+never sees an API key; it only talks to these two backend routes.
 
 Setup:
 
 ```bash
 cp .env.example .env       # then fill in ANTHROPIC_API_KEY
-vercel dev                 # serves both Vite and api/explore.ts locally
+vercel dev                 # serves Vite, api/explore.ts, and api/critique.ts locally
 ```
 
-`yarn dev` alone will not serve `/api/explore` (Vite doesn't run Vercel
-functions), so the app falls back to the static demo tree with a toast
-explaining why if you use `yarn dev` without `vercel dev`, or if the API
-key isn't set, or a request fails for any reason.
+`yarn dev` alone will not serve `/api/explore` or `/api/critique` (Vite
+doesn't run Vercel functions), so Explore falls back to the static demo tree
+with a toast explaining why if you use `yarn dev` without `vercel dev`, or
+if the API key isn't set, or a request fails for any reason. Route Detail /
+Compare / Validate show a plain error state instead of silently falling
+back, since there's no sensible static substitute for a critique of your
+specific route.
 
 On Vercel, set `ANTHROPIC_API_KEY` as a project environment variable
 (Project Settings → Environment Variables) — never commit it.
@@ -72,16 +88,23 @@ On Vercel, set `ANTHROPIC_API_KEY` as a project environment variable
 
 This is still a demo-quality product, not production-ready:
 
-- **Explore is a real model call; everything else still isn't.** Compare,
-  Validate, and Portfolio-side data are mocked, authored for a fictional
-  scenario (an AI recruiting platform idea, explored on behalf of a
-  fictional PE portfolio company, "NorthPeak Industrial"). Clicking into a
-  generated route's detail page, Validate, or Compare will show mock
-  NorthPeak content or an empty state, not analysis of your real idea —
-  that's the next phase.
-- **No persistence.** All state (the generated tree, saved routes,
-  exploration history) lives in memory for the session and resets on
-  reload.
+- **Explore and the Critic are both real model calls now.** Every route in
+  a live-generated exploration gets its own Critic-generated route spec,
+  comparison scorecard, and validation case — Compare, Validate, Saved, and
+  Explorations all work end-to-end for a real idea, not just the static
+  NorthPeak demo tree (an AI recruiting platform idea, explored on behalf of
+  a fictional PE portfolio company, "NorthPeak Industrial", still used as
+  the guided-demo content and as an offline fallback). Portfolio-side data
+  (Portfolio Companies, Decisions, Experiments, etc.) is still fully mocked
+  and unrouted — see [Future phases](#future-phases-not-in-v1).
+- **Critique evidence is honestly labeled, not fabricated.** The Critic is
+  instructed to only cite a source it's actually confident is real, and to
+  otherwise say plainly that a claim is model reasoning rather than
+  inventing a study, statistic, or publication — consistent with the
+  four-part trust model the rest of the app uses.
+- **No persistence.** All state (the generated tree, saved routes, the
+  Critic result cache, exploration history) lives in memory for the session
+  and resets on reload.
 - **No real security or data-handling guarantees exist yet.** The app says
   so explicitly in its own UI (see the notice on the New Exploration file
   upload) — do not upload real confidential material to any deployment of
@@ -128,14 +151,24 @@ src/
     ui/              Shared primitives (Button, Modal, StatusBadge, the
                       four-state epistemic tags, HallucinInfinityLoader)
     layout/           Sidebar, AppShell
-  data/              Mocked content — nodes.ts (the exploration tree),
-                     routeDetails.ts, validation.ts, comparisons.ts, plus
-                     the not-yet-routed Portfolio-side datasets
+  data/              nodes.ts (the exploration tree — demo by default, or
+                     the live Dreamer output once one's been generated),
+                     routeDetails.ts / validation.ts / comparisons.ts (demo
+                     data first, then the Critic cache via
+                     critiqueCache.ts), plus the not-yet-routed
+                     Portfolio-side datasets
+  lib/               exploreClient.ts / critiqueClient.ts (typed fetch
+                     wrappers for the two backend routes), critiqueRunner.ts
+                     (dedupes/caches in-flight Critic calls), useCritique.ts
+                     (the hook pages use to trigger + read critique state)
   state/             ExplorationContext — the one piece of shared state
                      (current idea, saved/dismissed routes, tracked
                      opportunities)
   types/             Domain types for both the V1 flow and the deferred
                      Portfolio-side features
+api/
+  explore.ts         The Dreamer — generates the exploration tree
+  critique.ts        The Critic — stress-tests one route at a time
 ```
 
 ## Design system notes

@@ -2,29 +2,61 @@ import React from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeftIcon, Layers3Icon, FlaskConicalIcon, BookmarkIcon, CompassIcon } from 'lucide-react';
 import { getRouteDetail } from '../data/routeDetails';
+import { getNode } from '../data/nodes';
 import { RouteBreadcrumb } from '../components/route/RouteBreadcrumb';
 import { RouteDetailBody } from '../components/route/RouteDetailBody';
 import { StatusBadge } from '../components/ui/StatusBadge';
 import { Button } from '../components/ui/Button';
 import { ShareButton } from '../components/ui/ShareButton';
 import { EmptyState } from '../components/ui/EmptyState';
+import { GeneratingState } from '../components/ui/GeneratingState';
 import { useExploration } from '../state/ExplorationContext';
 import { useToast } from '../components/ui/Toast';
+import { useCritique } from '../lib/useCritique';
 
 export function RouteDetail() {
   const { nodeId = '' } = useParams();
   const navigate = useNavigate();
   const { showToast } = useToast();
   const { isSaved, toggleSaved } = useExploration();
+  const node = getNode(nodeId);
+  const { ready, loading, error } = useCritique(nodeId);
   const detail = getRouteDetail(nodeId);
 
-  if (!detail) {
+  if (!node) {
     return (
       <div className="flex h-full items-center justify-center">
         <EmptyState
           icon={CompassIcon}
           title="Route not found"
           description="This route may have come from a different exploration."
+          action={
+            <Button variant="primary" onClick={() => navigate('/map')}>
+              Return to Map
+            </Button>
+          }
+        />
+      </div>
+    );
+  }
+
+  if (!ready && loading) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <GeneratingState
+          messages={[`Stress-testing ${node.title}...`, 'Weighing tradeoffs...', 'Building the full route spec...']}
+        />
+      </div>
+    );
+  }
+
+  if (!detail) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <EmptyState
+          icon={CompassIcon}
+          title={error ? "Couldn't generate this route's spec" : 'Route not found'}
+          description={error ?? 'This route may have come from a different exploration.'}
           action={
             <Button variant="primary" onClick={() => navigate('/map')}>
               Return to Map

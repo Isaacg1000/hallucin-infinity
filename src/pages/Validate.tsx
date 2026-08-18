@@ -1,8 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeftIcon, BookmarkIcon, CompassIcon } from 'lucide-react';
 import { getValidation } from '../data/validation';
 import { getRouteDetail } from '../data/routeDetails';
+import { getNode } from '../data/nodes';
+import { useCritique } from '../lib/useCritique';
 import { EvidenceItem } from '../types';
 import { RouteBreadcrumb } from '../components/route/RouteBreadcrumb';
 import { ValidationSummary } from '../components/validate/ValidationSummary';
@@ -24,21 +26,16 @@ export function Validate() {
   const navigate = useNavigate();
   const { isSaved, toggleSaved } = useExploration();
   const { showToast } = useToast();
-  const [loading, setLoading] = useState(true);
   const [openCitation, setOpenCitation] = useState<{ item: EvidenceItem; index: number; contradicts: boolean } | null>(
     null
   );
 
-  useEffect(() => {
-    setLoading(true);
-    const id = window.setTimeout(() => setLoading(false), 2500);
-    return () => window.clearTimeout(id);
-  }, [nodeId]);
-
+  const node = getNode(nodeId);
+  const { ready, loading, error } = useCritique(nodeId);
   const detail = getRouteDetail(nodeId);
   const validation = getValidation(nodeId);
 
-  if (!detail || !validation) {
+  if (!node) {
     return (
       <div className="flex h-full items-center justify-center">
         <EmptyState
@@ -54,15 +51,32 @@ export function Validate() {
     );
   }
 
-  if (loading) {
+  if (!ready && loading) {
     return (
       <div className="flex h-full items-center justify-center">
         <GeneratingState
           messages={[
-            `Challenging assumptions behind ${detail.name}...`,
+            `Challenging assumptions behind ${node.title}...`,
             'Looking for evidence...',
             'Weighing what we found...'
           ]}
+        />
+      </div>
+    );
+  }
+
+  if (!detail || !validation) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <EmptyState
+          icon={CompassIcon}
+          title={error ? "Couldn't validate this route" : 'Route not found'}
+          description={error ?? undefined}
+          action={
+            <Button variant="primary" onClick={() => navigate('/map')}>
+              Return to Map
+            </Button>
+          }
         />
       </div>
     );

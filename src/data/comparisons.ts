@@ -1,5 +1,6 @@
 import { ComparisonDimensionKey, ComparisonDimensions, RatingLevel } from '../types';
 import { getRouteDetail } from './routeDetails';
+import { getCritique } from './critiqueCache';
 
 export const DIMENSION_LABELS: Record<ComparisonDimensionKey, string> = {
   marketPotential: 'Market Potential',
@@ -64,6 +65,8 @@ export const COMPARISONS: Record<string, ComparisonDimensions> = {
  * like a stub. */
 export function getComparison(nodeId: string): ComparisonDimensions {
   if (COMPARISONS[nodeId]) return COMPARISONS[nodeId];
+  const critique = getCritique(nodeId);
+  if (critique) return critique.comparison;
   const detail = getRouteDetail(nodeId);
   const seed = nodeId.length + (detail?.name.length ?? 0);
   const levels: RatingLevel[] = ['Low', 'Medium', 'High', 'Very High'];

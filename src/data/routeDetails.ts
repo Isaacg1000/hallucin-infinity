@@ -1,4 +1,5 @@
 import { RouteDetailData } from '../types';
+import { getCritique } from './critiqueCache';
 
 // Full Route Detail records, keyed by leaf node id. The three routes used in
 // the guided demo (Healthcare Credential Intelligence, Enterprise Resume
@@ -414,5 +415,6 @@ export const ROUTE_DETAILS: Record<string, RouteDetailData> = {
 };
 
 export function getRouteDetail(nodeId: string): RouteDetailData | undefined {
-  return ROUTE_DETAILS[nodeId];
+  if (ROUTE_DETAILS[nodeId]) return ROUTE_DETAILS[nodeId];
+  return getCritique(nodeId)?.routeDetail;
 }

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { XIcon, PlusIcon } from 'lucide-react';
 import { ComparisonGrid } from '../components/compare/ComparisonGrid';
@@ -6,6 +6,9 @@ import { PriorityRanking } from '../components/compare/PriorityRanking';
 import { GeneratingState } from '../components/ui/GeneratingState';
 import { getComparison, DIMENSION_LABELS, DIMENSION_ORDER, LOWER_IS_BETTER, levelScore } from '../data/comparisons';
 import { getRouteDetail, ROUTE_DETAILS } from '../data/routeDetails';
+import { getNode } from '../data/nodes';
+import { useExploration } from '../state/ExplorationContext';
+import { useCritiqueMany } from '../lib/useCritique';
 import { ComparisonDimensionKey, ComparisonDimensions } from '../types';
 
 const DEFAULT_COMPARE = ['cust-healthcare-ats', 'cust-enterprise-resume', 'cust-staffing-reengagement'];
@@ -15,13 +18,16 @@ const LABEL_TO_KEY = Object.fromEntries(Object.entries(DIMENSION_LABELS).map(([k
 export function Compare() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
+  const { savedRouteIds } = useExploration();
 
   const [routeIds, setRouteIds] = useState<string[]>(() => {
     const withId = params.get('with');
-    if (withId && ROUTE_DETAILS[withId]) {
-      const base = DEFAULT_COMPARE.filter((id) => id !== withId);
+    const saved = Array.from(savedRouteIds).filter((id) => !!getNode(id));
+    if (withId && getNode(withId)) {
+      const base = (saved.length >= 2 ? saved : DEFAULT_COMPARE).filter((id) => id !== withId);
       return [withId, ...base].slice(0, 4);
     }
+    if (saved.length >= 2) return saved.slice(0, 4);
     return DEFAULT_COMPARE;
   });
 
@@ -82,24 +88,30 @@ export function Compare() {
     };
   }, [strongestId, routeIds, comparisons]);
 
-  const availableToAdd = Object.keys(ROUTE_DETAILS).filter((id) => !routeIds.includes(id));
+  const availableToAdd = useMemo(() => {
+    const ids = new Set([...Object.keys(ROUTE_DETAILS), ...Array.from(savedRouteIds)]);
+    return Array.from(ids).filter((id) => !!getNode(id) && !routeIds.includes(id));
+  }, [savedRouteIds, routeIds]);
 
   function removeRoute(id: string) {
     if (routeIds.length <= 2) return;
     setRouteIds((prev) => prev.filter((r) => r !== id));
   }
 
-  const [loading, setLoading] = useState(true);
-  useEffect(() => {
-    const id = window.setTimeout(() => setLoading(false), 1400);
-    return () => window.clearTimeout(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const { ready, loading, error } = useCritiqueMany(routeIds);
 
-  if (loading) {
+  if (!ready && loading) {
     return (
       <div className="flex h-full items-center justify-center">
-        <GeneratingState messages={[`Comparing ${routeIds.length} paths...`]} />
+        <GeneratingState messages={[`Comparing ${routeIds.length} paths...`, 'Stress-testing each one...']} />
+      </div>
+    );
+  }
+
+  if (!ready && error) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <p className="max-w-sm text-center text-sm text-muted">{error}</p>
       </div>
     );
   }
@@ -142,7 +154,7 @@ export function Compare() {
                 <option value="">Add route</option>
                 {availableToAdd.map((id) => (
                   <option key={id} value={id}>
-                    {getRouteDetail(id)?.name}
+                    {getRouteDetail(id)?.name ?? getNode(id)?.title ?? id}
                   </option>
                 ))}
               </select>

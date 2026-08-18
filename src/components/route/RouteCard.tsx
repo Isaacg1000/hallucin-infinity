@@ -14,20 +14,26 @@ interface RouteCardProps {
 export function RouteCard({ nodeId, onClick, selected, actions, className = '' }: RouteCardProps) {
   const node = getNode(nodeId);
   const detail = getRouteDetail(nodeId);
-  if (!node || !detail) return null;
+  if (!node) return null;
 
   const category = getBreadcrumb(nodeId).find((n) => n.kind === 'category');
+
+  // A saved-but-not-yet-critiqued generated route still has real data from
+  // the Dreamer (title/reasoning) — fall back to that rather than
+  // disappearing from the list while the Critic call is in flight.
+  const name = detail?.name ?? node.title;
+  const thesis = detail?.thesis ?? node.reasoning ?? node.subtitle ?? '';
 
   const content = (
     <>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           {category && <p className="text-2xs font-medium uppercase tracking-label text-muted-soft">{category.title}</p>}
-          <h3 className="mt-1 text-[15px] font-semibold leading-snug text-ink">{detail.name}</h3>
+          <h3 className="mt-1 text-[15px] font-semibold leading-snug text-ink">{name}</h3>
         </div>
         {actions}
       </div>
-      <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-muted">{detail.thesis}</p>
+      {thesis && <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-muted">{thesis}</p>}
       <div className="mt-3">
         <StatusBadge status="hypothesis" />
       </div>

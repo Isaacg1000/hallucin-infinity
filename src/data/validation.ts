@@ -1,5 +1,6 @@
 import { ValidationData } from '../types';
 import { getRouteDetail } from './routeDetails';
+import { getCritique } from './critiqueCache';
 
 export const VALIDATIONS: Record<string, ValidationData> = {
   'cust-healthcare-ats': {
@@ -86,6 +87,8 @@ export const VALIDATIONS: Record<string, ValidationData> = {
  * and unknowns rather than inventing generic filler. */
 export function getValidation(nodeId: string): ValidationData | undefined {
   if (VALIDATIONS[nodeId]) return VALIDATIONS[nodeId];
+  const critique = getCritique(nodeId);
+  if (critique) return critique.validation;
   const detail = getRouteDetail(nodeId);
   if (!detail) return undefined;
 

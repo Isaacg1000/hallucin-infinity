@@ -7,14 +7,14 @@ import { EmptyState } from '../components/ui/EmptyState';
 import { EXPLORATIONS } from '../data/explorations';
 import { useExploration } from '../state/ExplorationContext';
 import { useToast } from '../components/ui/Toast';
-import { ROUTE_DETAILS } from '../data/routeDetails';
+import { getNode } from '../data/nodes';
 
 export function Explorations() {
   const navigate = useNavigate();
   const { setIdeaText, savedRouteIds, toggleSaved } = useExploration();
   const { showToast } = useToast();
 
-  const saved = Array.from(savedRouteIds).filter((id) => ROUTE_DETAILS[id]);
+  const saved = Array.from(savedRouteIds).filter((id) => !!getNode(id));
 
   return (
     <div className="h-full overflow-y-auto">

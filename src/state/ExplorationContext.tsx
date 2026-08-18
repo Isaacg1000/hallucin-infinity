@@ -2,6 +2,8 @@ import React, { createContext, useCallback, useContext, useMemo, useState } from
 import { ContextAnswers, Opportunity } from '../types';
 import { IDEA_TEXT } from '../data/nodes';
 import { buildOpportunityFromRoute } from '../data/trackOpportunity';
+import { ensureCritique } from '../lib/critiqueRunner';
+import { resetCritiqueCache } from '../data/critiqueCache';
 
 interface ExplorationState {
   ideaText: string;
@@ -79,14 +81,24 @@ export function ExplorationProvider({ children }: { children: React.ReactNode })
   const isRevealed = useCallback((id: string) => everExpandedIds.has(id), [everExpandedIds]);
   const isCollapsed = useCallback((id: string) => collapsedIds.has(id), [collapsedIds]);
 
-  const toggleSaved = useCallback((id: string) => {
-    setSavedRouteIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }, []);
+  const toggleSaved = useCallback(
+    (id: string) => {
+      setSavedRouteIds((prev) => {
+        const next = new Set(prev);
+        if (next.has(id)) {
+          next.delete(id);
+        } else {
+          next.add(id);
+          // Warm the Critic cache in the background as soon as a route is
+          // saved, so Compare/Validate have data ready regardless of
+          // which page the user navigates to next.
+          ensureCritique(id, ideaText, contextAnswers);
+        }
+        return next;
+      });
+    },
+    [ideaText, contextAnswers]
+  );
 
   const isSaved = useCallback((id: string) => savedRouteIds.has(id), [savedRouteIds]);
 
@@ -99,6 +111,7 @@ export function ExplorationProvider({ children }: { children: React.ReactNode })
     setCollapsedIds(new Set());
     setSavedRouteIds(new Set());
     setDismissedRouteIds(new Set());
+    resetCritiqueCache();
   }, []);
 
   const [trackedOpportunities, setTrackedOpportunities] = useState<Opportunity[]>([]);
