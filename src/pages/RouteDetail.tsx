@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeftIcon, Layers3Icon, FlaskConicalIcon, BookmarkIcon, CompassIcon } from 'lucide-react';
-import { getRouteDetail } from '../data/routeDetails';
+import { ArrowLeftIcon, Layers3Icon, FlaskConicalIcon, BookmarkIcon, CompassIcon, RefreshCwIcon } from 'lucide-react';
+import { getRouteDetail, ROUTE_DETAILS } from '../data/routeDetails';
 import { getNode } from '../data/nodes';
 import { RouteBreadcrumb } from '../components/route/RouteBreadcrumb';
 import { RouteDetailBody } from '../components/route/RouteDetailBody';
@@ -13,15 +13,19 @@ import { GeneratingState } from '../components/ui/GeneratingState';
 import { useExploration } from '../state/ExplorationContext';
 import { useToast } from '../components/ui/Toast';
 import { useCritique } from '../lib/useCritique';
+import { regenerateCritique } from '../lib/critiqueRunner';
 
 export function RouteDetail() {
   const { nodeId = '' } = useParams();
   const navigate = useNavigate();
   const { showToast } = useToast();
-  const { isSaved, toggleSaved } = useExploration();
+  const { isSaved, toggleSaved, ideaText, contextAnswers } = useExploration();
   const node = getNode(nodeId);
   const { ready, loading, error } = useCritique(nodeId);
   const detail = getRouteDetail(nodeId);
+  // Demo routes are hand-authored, not Critic-generated — nothing to
+  // regenerate, so the action only makes sense for a live route.
+  const isRegeneratable = !ROUTE_DETAILS[nodeId];
 
   if (!node) {
     return (
@@ -104,6 +108,19 @@ export function RouteDetail() {
         </button>
         <div className="flex items-center gap-2">
           <ShareButton label={detail.name} />
+          {isRegeneratable && (
+            <Button
+              variant="secondary"
+              onClick={() => {
+                showToast('Regenerating this route...', 'success');
+                regenerateCritique(nodeId, ideaText, contextAnswers).catch(() => {
+                  showToast("Couldn't regenerate this route — try again");
+                });
+              }}>
+              <RefreshCwIcon className="h-3.5 w-3.5" strokeWidth={1.75} />
+              Regenerate
+            </Button>
+          )}
           <Button
             variant={saved ? 'primary' : 'secondary'}
             onClick={() => {

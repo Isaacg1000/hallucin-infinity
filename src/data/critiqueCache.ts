@@ -34,3 +34,13 @@ export function resetCritiqueCache(): void {
   CRITIQUE_CACHE.clear();
   listeners.forEach((fn) => fn());
 }
+
+/** Drops a single route's cached Critic result so the next read falls
+ * through to a fresh request — the mechanism behind "regenerate this
+ * route" on RouteDetail. Only meaningful for a live-generated route;
+ * a demo route (in ROUTE_DETAILS) is never cached here in the first
+ * place, so clearing it is a no-op by design. */
+export function clearCritique(nodeId: string): void {
+  if (!CRITIQUE_CACHE.delete(nodeId)) return;
+  listeners.forEach((fn) => fn());
+}

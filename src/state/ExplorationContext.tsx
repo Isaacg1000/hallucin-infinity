@@ -1,9 +1,36 @@
-import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { ContextAnswers, Opportunity } from '../types';
 import { IDEA_TEXT } from '../data/nodes';
 import { buildOpportunityFromRoute } from '../data/trackOpportunity';
 import { ensureCritique } from '../lib/critiqueRunner';
 import { resetCritiqueCache } from '../data/critiqueCache';
+
+// A page reload previously wiped every trace of what a user had done —
+// idea text, saved routes, dismissed routes, tracked opportunities all
+// reset to defaults. This persists just that state to localStorage, so a
+// refresh (or reopening the tab) doesn't lose it. It does not persist the
+// generated exploration tree itself (that's regenerated from ideaText on
+// the Map page), so saved/dismissed ids from a live-generated tree may
+// not resolve to real nodes after a reload — same honest fallback that
+// `RouteCard`/`Saved` already apply by filtering out unknown ids.
+const STORAGE_KEY = 'hallucinate:exploration:v1';
+
+interface PersistedExplorationState {
+  ideaText: string;
+  contextAnswers: ContextAnswers | null;
+  savedRouteIds: string[];
+  dismissedRouteIds: string[];
+  trackedOpportunities: Opportunity[];
+}
+
+function loadPersisted(): Partial<PersistedExplorationState> {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
 
 interface ExplorationState {
   ideaText: string;
@@ -43,6 +70,12 @@ interface ExplorationState {
    * (demo or a prior generated exploration) so it doesn't reference node
    * ids that no longer exist once a new tree is loaded. */
   resetForNewExploration: () => void;
+
+  /** True when the current exploration tree is the static demo fallback
+   * because live generation failed — drives the persistent banner in
+   * AppShell (not just a toast that disappears). */
+  isDemoData: boolean;
+  setIsDemoData: (v: boolean) => void;
 }
 
 const ExplorationCtx = createContext<ExplorationState | null>(null);
@@ -52,12 +85,16 @@ const DEFAULT_SAVED = new Set<string>(['cust-healthcare-ats', 'prod-workflow']);
 const DEFAULT_PROMISING = new Set<string>(['cust-healthcare-ats', 'cust-staffing-reengagement', 'prob-speed']);
 
 export function ExplorationProvider({ children }: { children: React.ReactNode }) {
-  const [ideaText, setIdeaText] = useState(IDEA_TEXT);
-  const [contextAnswers, setContextAnswers] = useState<ContextAnswers | null>(null);
+  const persisted = useMemo(loadPersisted, []);
+  const [ideaText, setIdeaText] = useState(persisted.ideaText ?? IDEA_TEXT);
+  const [contextAnswers, setContextAnswers] = useState<ContextAnswers | null>(persisted.contextAnswers ?? null);
   const [everExpandedIds, setEverExpandedIds] = useState<Set<string>>(DEFAULT_REVEALED);
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
-  const [savedRouteIds, setSavedRouteIds] = useState<Set<string>>(DEFAULT_SAVED);
-  const [dismissedRouteIds, setDismissedRouteIds] = useState<Set<string>>(new Set());
+  const [savedRouteIds, setSavedRouteIds] = useState<Set<string>>(
+    new Set(persisted.savedRouteIds ?? Array.from(DEFAULT_SAVED))
+  );
+  const [dismissedRouteIds, setDismissedRouteIds] = useState<Set<string>>(new Set(persisted.dismissedRouteIds ?? []));
+  const [isDemoData, setIsDemoData] = useState(false);
 
   const revealChildren = useCallback((id: string) => {
     setEverExpandedIds((prev) => new Set(prev).add(id));
@@ -114,7 +151,7 @@ export function ExplorationProvider({ children }: { children: React.ReactNode })
     resetCritiqueCache();
   }, []);
 
-  const [trackedOpportunities, setTrackedOpportunities] = useState<Opportunity[]>([]);
+  const [trackedOpportunities, setTrackedOpportunities] = useState<Opportunity[]>(persisted.trackedOpportunities ?? []);
 
   const isTracked = useCallback(
     (routeId: string) => trackedOpportunities.some((o) => o.id === routeId),
@@ -131,6 +168,22 @@ export function ExplorationProvider({ children }: { children: React.ReactNode })
     },
     [trackedOpportunities]
   );
+
+  useEffect(() => {
+    const toPersist: PersistedExplorationState = {
+      ideaText,
+      contextAnswers,
+      savedRouteIds: Array.from(savedRouteIds),
+      dismissedRouteIds: Array.from(dismissedRouteIds),
+      trackedOpportunities
+    };
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(toPersist));
+    } catch {
+      // Storage full or unavailable (e.g. private browsing) — state
+      // simply won't survive a reload; nothing else depends on it.
+    }
+  }, [ideaText, contextAnswers, savedRouteIds, dismissedRouteIds, trackedOpportunities]);
 
   const value = useMemo<ExplorationState>(
     () => ({
@@ -153,7 +206,9 @@ export function ExplorationProvider({ children }: { children: React.ReactNode })
       trackedOpportunities,
       isTracked,
       trackOpportunity,
-      resetForNewExploration
+      resetForNewExploration,
+      isDemoData,
+      setIsDemoData
     }),
     [
       ideaText,
@@ -172,7 +227,8 @@ export function ExplorationProvider({ children }: { children: React.ReactNode })
       isSaved,
       dismissedRouteIds,
       dismissRoute,
-      resetForNewExploration
+      resetForNewExploration,
+      isDemoData
     ]
   );
 

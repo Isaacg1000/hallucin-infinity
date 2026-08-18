@@ -4,12 +4,13 @@ import { AppShell } from './components/layout/AppShell';
 import { ExplorationProvider } from './state/ExplorationContext';
 import { ToastProvider } from './components/ui/Toast';
 
-// V1 — frozen around three features: Explore, Compare, Validate.
-// Portfolio Companies, Decisions, Experiments, Institutional Intelligence,
-// Reporting, Settings, and Organization are future phases. Their pages
-// still exist on disk (not deleted, same pattern as the pre-existing
-// unrouted Analysis.tsx/DecisionWorkspace.tsx/Explorer.tsx) — just not
-// routed or linked from anywhere in V1.
+// V1 — the Explore -> Compare -> Validate -> Test (Action Plan) flow, plus
+// the Opportunities view a validated route lands in once tracked (see
+// data/trackOpportunity.ts). Portfolio Companies, Decisions, Experiments,
+// Institutional Intelligence, Reporting, Settings, and Organization are
+// still future phases. Their pages still exist on disk (not deleted, same
+// pattern as the pre-existing unrouted Analysis.tsx/DecisionWorkspace.tsx/
+// Explorer.tsx) — just not routed or linked from anywhere in V1.
 import { Home } from './pages/Home';
 import { Context } from './pages/Context';
 import { ExplorationMap } from './pages/ExplorationMap';
@@ -18,6 +19,8 @@ import { Compare } from './pages/Compare';
 import { Validate } from './pages/Validate';
 import { Explorations } from './pages/Explorations';
 import { Saved } from './pages/Saved';
+import { ActionPlan } from './pages/ActionPlan';
+import { OpportunityExplorer } from './pages/OpportunityExplorer';
 
 export function App() {
   return (
@@ -32,6 +35,8 @@ export function App() {
               <Route path="/route/:nodeId" element={<RouteDetail />} />
               <Route path="/compare" element={<Compare />} />
               <Route path="/validate/:nodeId" element={<Validate />} />
+              <Route path="/plan/:nodeId" element={<ActionPlan />} />
+              <Route path="/opportunities" element={<OpportunityExplorer />} />
               <Route path="/explorations" element={<Explorations />} />
               <Route path="/saved" element={<Saved />} />
 

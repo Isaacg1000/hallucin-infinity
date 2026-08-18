@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeftIcon, DownloadIcon, BookmarkIcon, CompassIcon, TargetIcon } from 'lucide-react';
 import { getActionPlan } from '../data/actionPlans';
+import { getNode } from '../data/nodes';
 import { downloadPlan } from '../data/exportPlan';
 import { RouteBreadcrumb } from '../components/route/RouteBreadcrumb';
 import { ActionPlanBody } from '../components/plan/ActionPlanBody';
@@ -10,23 +11,17 @@ import { EmptyState } from '../components/ui/EmptyState';
 import { Button } from '../components/ui/Button';
 import { useExploration } from '../state/ExplorationContext';
 import { useToast } from '../components/ui/Toast';
+import { useCritique } from '../lib/useCritique';
 
 export function ActionPlan() {
   const { nodeId = '' } = useParams();
   const navigate = useNavigate();
   const { showToast } = useToast();
   const { isSaved, toggleSaved, isTracked, trackOpportunity } = useExploration();
-  const [loading, setLoading] = useState(true);
+  const node = getNode(nodeId);
+  const { ready, loading, error } = useCritique(nodeId);
 
-  useEffect(() => {
-    setLoading(true);
-    const id = window.setTimeout(() => setLoading(false), 1500);
-    return () => window.clearTimeout(id);
-  }, [nodeId]);
-
-  const plan = getActionPlan(nodeId);
-
-  if (!plan) {
+  if (!node) {
     return (
       <div className="flex h-full items-center justify-center">
         <EmptyState
@@ -42,10 +37,29 @@ export function ActionPlan() {
     );
   }
 
-  if (loading) {
+  if (!ready && loading) {
     return (
       <div className="flex h-full items-center justify-center">
-        <GeneratingState messages={[`Building a validation plan for ${plan.routeName}...`]} />
+        <GeneratingState messages={[`Building a test plan for ${node.title}...`]} />
+      </div>
+    );
+  }
+
+  const plan = getActionPlan(nodeId);
+
+  if (!plan) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <EmptyState
+          icon={CompassIcon}
+          title={error ? "Couldn't build a test plan" : 'Route not found'}
+          description={error ?? undefined}
+          action={
+            <Button variant="primary" onClick={() => navigate('/map')}>
+              Return to Map
+            </Button>
+          }
+        />
       </div>
     );
   }

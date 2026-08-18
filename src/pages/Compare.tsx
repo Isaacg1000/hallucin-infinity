@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { XIcon, PlusIcon } from 'lucide-react';
+import { XIcon, PlusIcon, DownloadIcon } from 'lucide-react';
 import { ComparisonGrid } from '../components/compare/ComparisonGrid';
 import { PriorityRanking } from '../components/compare/PriorityRanking';
 import { GeneratingState } from '../components/ui/GeneratingState';
@@ -10,6 +10,8 @@ import { getNode } from '../data/nodes';
 import { useExploration } from '../state/ExplorationContext';
 import { useCritiqueMany } from '../lib/useCritique';
 import { ComparisonDimensionKey, ComparisonDimensions } from '../types';
+import { downloadComparison } from '../data/exportComparison';
+import { useToast } from '../components/ui/Toast';
 
 const DEFAULT_COMPARE = ['cust-healthcare-ats', 'cust-enterprise-resume', 'cust-staffing-reengagement'];
 const PRIORITY_OPTIONS = Object.values(DIMENSION_LABELS);
@@ -19,6 +21,7 @@ export function Compare() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const { savedRouteIds } = useExploration();
+  const { showToast } = useToast();
 
   const [routeIds, setRouteIds] = useState<string[]>(() => {
     const withId = params.get('with');
@@ -223,6 +226,16 @@ export function Compare() {
         </div>
 
         <div className="mt-8 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              downloadComparison({ routeIds, comparisons, priorities, strongestId });
+              showToast('Comparison exported', 'success');
+            }}
+            className="inline-flex h-9 items-center gap-1.5 rounded-md border border-line-strong bg-surface px-3.5 text-[13px] text-ink transition-colors hover:bg-raised">
+            <DownloadIcon className="h-3.5 w-3.5" strokeWidth={1.75} />
+            Export
+          </button>
           <button
             type="button"
             onClick={() => navigate('/map')}

@@ -1,6 +1,6 @@
 import { getNode } from '../data/nodes';
 import { getRouteDetail } from '../data/routeDetails';
-import { setCritique } from '../data/critiqueCache';
+import { setCritique, clearCritique } from '../data/critiqueCache';
 import { critiqueRoute, RouteCritiqueInput } from './critiqueClient';
 import { ContextAnswers } from '../types';
 
@@ -61,4 +61,16 @@ export function ensureCritique(nodeId: string, ideaText: string, contextAnswers:
     // Swallowed intentionally — a page that later needs this route's data
     // will call runCritique again via useCritique and can surface the error.
   });
+}
+
+/** Drops a live-generated route's cached result and re-runs the Critic
+ * against it — "regenerate this route" on RouteDetail. A no-op for demo
+ * routes, since those never live in the critique cache to begin with. */
+export function regenerateCritique(
+  nodeId: string,
+  ideaText: string,
+  contextAnswers: ContextAnswers | null
+): Promise<void> {
+  clearCritique(nodeId);
+  return runCritique(nodeId, ideaText, contextAnswers);
 }

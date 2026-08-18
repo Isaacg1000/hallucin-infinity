@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BookmarkIcon, XIcon } from 'lucide-react';
+import { BookmarkIcon, TargetIcon, XIcon } from 'lucide-react';
 import { PageHeader } from '../components/ui/PageHeader';
 import { RouteCard } from '../components/route/RouteCard';
 import { EmptyState } from '../components/ui/EmptyState';
@@ -36,17 +36,30 @@ export function Saved() {
                 nodeId={id}
                 onClick={() => navigate(`/route/${id}`)}
                 actions={
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleSaved(id);
-                      showToast('Removed from Saved Routes');
-                    }}
-                    aria-label="Remove from saved"
-                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-soft hover:bg-sunken hover:text-ink">
-                    <XIcon className="h-3.5 w-3.5" strokeWidth={1.75} />
-                  </button>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/plan/${id}`);
+                      }}
+                      aria-label="Build a test plan for this route"
+                      title="Test this route"
+                      className="flex h-6 w-6 items-center justify-center rounded-md text-muted-soft hover:bg-sunken hover:text-ink">
+                      <TargetIcon className="h-3.5 w-3.5" strokeWidth={1.75} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleSaved(id);
+                        showToast('Removed from Saved Routes');
+                      }}
+                      aria-label="Remove from saved"
+                      className="flex h-6 w-6 items-center justify-center rounded-md text-muted-soft hover:bg-sunken hover:text-ink">
+                      <XIcon className="h-3.5 w-3.5" strokeWidth={1.75} />
+                    </button>
+                  </div>
                 }
               />
             ))}

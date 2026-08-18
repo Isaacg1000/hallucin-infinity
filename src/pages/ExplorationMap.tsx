@@ -31,7 +31,7 @@ const ACTIVITY: ActivityItem[] = [
 const MIN_LOADING_MS = STAGES.length * 650;
 
 export function ExplorationMap() {
-  const { ideaText, contextAnswers, resetForNewExploration } = useExploration();
+  const { ideaText, contextAnswers, resetForNewExploration, setIsDemoData } = useExploration();
   const { showToast } = useToast();
   const [loading, setLoading] = useState(true);
   const ranFor = useRef<string | null>(null);
@@ -51,11 +51,13 @@ export function ExplorationMap() {
         if (cancelled) return;
         loadGeneratedTree(tree);
         resetForNewExploration();
+        setIsDemoData(false);
       })
       .catch((err) => {
         if (cancelled) return;
         resetToDemoNodes();
         resetForNewExploration();
+        setIsDemoData(true);
         const message = err instanceof Error ? err.message : 'Live generation failed';
         showToast(`Showing demo routes — live generation unavailable (${message})`);
       })

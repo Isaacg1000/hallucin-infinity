@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeftIcon, BookmarkIcon, CompassIcon } from 'lucide-react';
+import { ArrowLeftIcon, BookmarkIcon, CompassIcon, TargetIcon } from 'lucide-react';
 import { getValidation } from '../data/validation';
 import { getRouteDetail } from '../data/routeDetails';
 import { getNode } from '../data/nodes';
@@ -190,7 +190,7 @@ export function Validate() {
             Keep Exploring
           </Button>
           <Button
-            variant="primary"
+            variant="secondary"
             onClick={() => {
               const wasSaved = isSaved(nodeId);
               toggleSaved(nodeId);
@@ -199,6 +199,12 @@ export function Validate() {
             <BookmarkIcon className="h-3.5 w-3.5" strokeWidth={1.75} fill={isSaved(nodeId) ? 'currentColor' : 'none'} />
             {isSaved(nodeId) ? 'Saved' : 'Save Route'}
           </Button>
+          {validation.finalAssessment !== 'Not Yet' && (
+            <Button variant="primary" onClick={() => navigate(`/plan/${nodeId}`)}>
+              <TargetIcon className="h-3.5 w-3.5" strokeWidth={1.75} />
+              Build Test Plan
+            </Button>
+          )}
         </div>
       </div>
 
