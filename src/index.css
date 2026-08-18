@@ -1,0 +1,72 @@
+/* @import url() FONT IMPORTS MUST ALWAYS BE AT THE VERY TOP OF THIS FILE, ABOVE THE TAILWIND IMPORTS — DO NOT DELETE THIS COMMENT */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Caveat:wght@600;700&display=swap');
+
+/* CRITICAL: THE FOLLOWING TAILWIND IMPORTS MUST NEVER BE DELETED OR REORDERED — DO NOT DELETE THIS COMMENT */
+@import 'tailwindcss/base';
+@import 'tailwindcss/components';
+@import 'tailwindcss/utilities';
+
+/* END TAILWIND IMPORTS — ALL OTHER CSS MUST GO BELOW THIS LINE */
+
+html,
+body,
+#root {
+  height: 100%;
+  width: 100%;
+}
+body {
+  background-color: #f7f8fa;
+  color: #181b22;
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: 'cv05', 'ss01';
+}
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+::selection {
+  background: #d3ecdd;
+}
+*:focus-visible {
+  outline: 2px solid #0fa968;
+  outline-offset: 2px;
+}
+/* Thin, unobtrusive scrollbars for dense data surfaces */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: #d3d5da;
+  border: 3px solid transparent;
+  background-clip: content-box;
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #b3b6bd;
+  background-clip: content-box;
+}
+
+/* The Exploration Map has its own hover/press styling per node — suppress
+   React Flow's default mouse-click selection outline so it doesn't compete.
+   Keyboard focus is kept and given its own visible ring below: nodes are
+   tabbable, and a tabbing user must be able to see where they are. */
+.react-flow__node {
+  cursor: default;
+}
+.react-flow__node.selected,
+.react-flow__node.selectable:focus {
+  outline: none;
+  box-shadow: none;
+}
+/* React Flow's own stylesheet (loaded lazily when the map mounts, so it can
+   land after this file regardless of source order) sets
+   `.react-flow__node.selectable:focus-visible { outline: none }` at matching
+   specificity — !important is the only reliable way to win that tie. */
+.react-flow__node.selectable:focus-visible {
+  outline: 2px solid #0fa968 !important;
+  outline-offset: 3px !important;
+  border-radius: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
